@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ApiGateway\ApiGateway.csproj" />
     <ProjectReference Include="..\BookingService\BookingService.csproj" />
+    <ProjectReference Include="..\IdentityService\IdentityService.csproj" />
   </ItemGroup>
 
 </Project>

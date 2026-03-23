@@ -1,7 +1,9 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 // 1. Setup Containers
-var sql = builder.AddSqlServer("sql").AddDatabase("sqldata");
+var sqlServer = builder.AddSqlServer("sql");
+var sql = sqlServer.AddDatabase("sqldata");
+var identitydb = sqlServer.AddDatabase("identitydb");
 var mongo = builder.AddMongoDB("mongo").AddDatabase("mongodata");
 var postgres = builder.AddPostgres("postgres").AddDatabase("postgresdata");
 var redis = builder.AddRedis("redis");
@@ -16,8 +18,13 @@ var bookingService = builder.AddProject<Projects.BookingService>("bookingservice
     .WaitFor(redis)
     .WaitFor(rabbitmq);
 
+var identityService = builder.AddProject<Projects.IdentityService>("identityservice")
+    .WithReference(identitydb)
+    .WaitFor(identitydb);
+
 var apiGateway = builder.AddProject<Projects.ApiGateway>("apigateway")
-    .WithReference(bookingService);
+    .WithReference(bookingService)
+    .WithReference(identityService);
 
 // 3. Setup Node.js Services (catalog, payment, frontend)
 var catalogService = builder.AddNpmApp("catalogservice", "../catalog-service", "start:dev")
