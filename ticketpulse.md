@@ -16,7 +16,8 @@ TicketPulse allows users to browse events, select seats on an interactive venue 
 |---|---|
 | Orchestration | .NET Aspire (AppHost + ServiceDefaults) |
 | API Gateway | .NET + YARP reverse proxy |
-| Booking Service | .NET 8, EF Core, SQL Server |
+| Identity Service | .NET 10, EF Core, SQL Server |
+| Booking Service | .NET 10, EF Core, SQL Server |
 | Catalog Service | NestJS, MongoDB |
 | Payment & Notification Service | Node.js / Express, PostgreSQL |
 | Frontend | Next.js (App Router), Tailwind CSS, Zustand |
@@ -36,6 +37,7 @@ Browser (Next.js)
       │
       ▼
 API Gateway (YARP)
+  ├── /api/auth/*     ──▶  Identity Service (.NET + SQL Server)
   ├── /api/catalog/*  ──▶  Catalog Service (NestJS + MongoDB)
   │                              └── Redis cache-aside
   └── /api/booking/*  ──▶  Booking Service (.NET + SQL Server)
@@ -65,9 +67,11 @@ API Gateway (YARP)
 
 ## Data models
 
-### SQL Server — Booking Service
+### SQL Server — Identity Service
 
 **Users** `Id | Email | PasswordHash | DisplayName | CreatedAt | Role`
+
+### SQL Server — Booking Service
 
 **Venues** `Id | Name | City | Address | TotalCapacity`
 
@@ -116,6 +120,13 @@ API Gateway (YARP)
 | GET | `/events/:id/dates` | — | Available dates with remaining seat counts |
 | GET | `/venues/:id` | — | Venue detail + seat layout reference |
 
+### Identity Service (`/api/auth`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| POST | `/register` | — | Register a new user account |
+| POST | `/login` | — | Verify credentials and return JWT |
+
 ### Booking Service (`/api/booking`)
 
 | Method | Path | Auth | Description |
@@ -129,9 +140,9 @@ API Gateway (YARP)
 
 ## JWT auth flow
 
-1. User logs in via NextAuth.js Credentials provider.
-2. NextAuth mints a signed JWT with `userId`, `email`, and `role` claims. Access token expires in 15 min; refresh token in 7 days.
-3. All requests go through the YARP gateway. The gateway validates the JWT signature and expiry.
+1. Next.js frontend calls `/api/auth/login` (routed to the standalone `Identity Service`).
+2. Identity Service verifies the email/password against SQL Server and mints a signed JWT with `userId`, `email`, and `role` claims. Access token expires in 15 min; refresh token in 7 days.
+3. All subsequent requests go through the YARP gateway with the JWT in the `Authorization: Bearer` header. The gateway validates the JWT signature and expiry.
 4. On success, the gateway injects `X-User-Id` and `X-User-Role` headers and forwards the request. Downstream services read these headers instead of re-parsing the token.
 5. Invalid or expired tokens receive a `401` before reaching any internal service.
 
@@ -146,7 +157,7 @@ Define all database schemas, OpenAPI specs, RabbitMQ event payloads, and the JWT
 Set up .NET Aspire AppHost with containerised SQL Server, MongoDB, PostgreSQL, Redis, and RabbitMQ. Bootstrap all five project folders and verify Aspire injects connection strings and service discovery URLs into both .NET and Node.js services.
 
 ### Phase 3 — Backend microservices
-Build the API Gateway (routing, rate limiting, JWT validation), Catalog Service (CRUD, Redis caching, text search), Booking Service (EF Core, Redlock, Outbox, Saga compensation), and Payment Service (mock payment logic, RabbitMQ publishing, email generation).
+Build the API Gateway (routing, rate limiting, JWT validation), Identity Service (JWT issuance, user management), Catalog Service (CRUD, Redis caching, text search), Booking Service (EF Core, Redlock, Outbox, Saga compensation), and Payment Service (mock payment logic, RabbitMQ publishing, email generation).
 
 ### Phase 4 — Frontend
 Next.js App Router with Tailwind and Zustand. Server Components for catalog browsing and SEO. Client Components for the interactive SVG seat map. Checkout flow with a Redis lock countdown timer and polling-based booking confirmation.
@@ -176,7 +187,8 @@ ticketpulse/
 │   ├── AppHost/                  # .NET Aspire orchestration
 │   ├── ServiceDefaults/          # Shared OTel, health, resilience
 │   ├── ApiGateway/               # YARP gateway (.NET)
-│   ├── BookingService/           # .NET 8, EF Core, SQL Server
+│   ├── IdentityService/          # .NET 10, EF Core, SQL Server
+│   ├── BookingService/           # .NET 10, EF Core, SQL Server
 │   ├── catalog-service/          # NestJS, MongoDB
 │   ├── payment-service/          # Node.js / Express, PostgreSQL
 │   └── frontend/                 # Next.js (App Router)
