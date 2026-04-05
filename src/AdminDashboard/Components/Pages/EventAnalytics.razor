@@ -1,0 +1,114 @@
+@page "/events"
+@using AdminDashboard.Models
+@using AdminDashboard.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject MetricsService MetricsService
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Event Analytics — TicketPulse Admin</PageTitle>
+
+<h2 class="page-heading">Event & Venue Analytics</h2>
+
+<div class="data-grid-container">
+    <table class="data-grid">
+        <thead>
+            <tr>
+                <th>Event ID</th>
+                <th>Seats Held</th>
+                <th>Seats Confirmed</th>
+                <th>Seats Cancelled</th>
+                <th>Revenue</th>
+                <th>Demand</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var evt in _eventMetrics)
+            {
+                var total = evt.TotalHeld + evt.TotalConfirmed + evt.TotalCancelled;
+                var confirmRate = total > 0 ? (int)((double)evt.TotalConfirmed / total * 100) : 0;
+                <tr>
+                    <td class="mono">@evt.EventId</td>
+                    <td>
+                        <span class="metric-inline pending">@evt.TotalHeld</span>
+                    </td>
+                    <td>
+                        <span class="metric-inline confirmed">@evt.TotalConfirmed</span>
+                    </td>
+                    <td>
+                        <span class="metric-inline cancelled">@evt.TotalCancelled</span>
+                    </td>
+                    <td>@evt.TotalRevenue.ToString("C")</td>
+                    <td>
+                        <div class="demand-bar">
+                            <div class="demand-fill" style="width: @(confirmRate)%"></div>
+                            <span class="demand-label">@confirmRate%</span>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (!_eventMetrics.Any())
+    {
+        <div class="empty-state table-empty">
+            <p>No event data yet. Waiting for bookings...</p>
+        </div>
+    }
+</div>
+
+<section class="charts-section" style="margin-top: 2rem;">
+    <div class="chart-card full-width">
+        <h3>Held vs. Confirmed by Event</h3>
+        <div class="horizontal-bars">
+            @foreach (var evt in _eventMetrics.Take(10))
+            {
+                var maxVal = _eventMetrics.Max(e => Math.Max(e.TotalHeld, e.TotalConfirmed));
+                var heldWidth = maxVal > 0 ? (int)((double)evt.TotalHeld / maxVal * 100) : 0;
+                var confirmedWidth = maxVal > 0 ? (int)((double)evt.TotalConfirmed / maxVal * 100) : 0;
+                <div class="hbar-row">
+                    <span class="hbar-label mono">@evt.EventId</span>
+                    <div class="hbar-group">
+                        <div class="hbar held" style="width: @(heldWidth)%">@evt.TotalHeld</div>
+                        <div class="hbar confirmed" style="width: @(confirmedWidth)%">@evt.TotalConfirmed</div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private List<EventMetrics> _eventMetrics = [];
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _eventMetrics = await MetricsService.GetAllEventMetricsAsync();
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/dashboard"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<EventMetrics>("ReceiveEventMetricsUpdate", async (metrics) =>
+        {
+            var existing = _eventMetrics.FindIndex(e => e.EventId == metrics.EventId);
+            if (existing >= 0)
+                _eventMetrics[existing] = metrics;
+            else
+                _eventMetrics.Insert(0, metrics);
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+            await _hubConnection.DisposeAsync();
+    }
+}

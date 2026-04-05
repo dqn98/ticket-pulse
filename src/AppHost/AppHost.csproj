@@ -18,6 +18,7 @@
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.1.2" />
     <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.1.2" />
     <PackageReference Include="Aspire.Hosting.Redis" Version="13.1.2" />
+    <PackageReference Include="Aspire.Hosting.Seq" Version="13.2.1" />
     <PackageReference Include="Aspire.Hosting.SqlServer" Version="13.1.2" />
   </ItemGroup>
 
@@ -25,6 +26,7 @@
     <ProjectReference Include="..\ApiGateway\ApiGateway.csproj" />
     <ProjectReference Include="..\BookingService\BookingService.csproj" />
     <ProjectReference Include="..\IdentityService\IdentityService.csproj" />
+    <ProjectReference Include="..\AdminDashboard\AdminDashboard.csproj" />
   </ItemGroup>
 
 </Project>

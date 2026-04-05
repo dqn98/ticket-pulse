@@ -1,0 +1,109 @@
+@page "/"
+@using AdminDashboard.Components.Shared
+@using AdminDashboard.Models
+@using AdminDashboard.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject MetricsService MetricsService
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Overview — TicketPulse Admin</PageTitle>
+
+<h2 class="page-heading">Main Overview</h2>
+
+<section class="metrics-grid">
+    <MetricCard Icon="💰" Label="Total Revenue" Value="@($"${_today.TotalRevenue:N2}")" CssClass="revenue" />
+    <MetricCard Icon="🎟️" Label="Today's Bookings" Value="@_today.TotalBookings.ToString()" CssClass="bookings" />
+    <MetricCard Icon="✅" Label="Confirmed" Value="@_today.ConfirmedBookings.ToString()" CssClass="confirmed" />
+    <MetricCard Icon="🔴" Label="Failed Payments" Value="@_today.FailedPayments.ToString()" CssClass="failed" />
+</section>
+
+<section class="charts-section">
+    <div class="chart-card">
+        <h3>Weekly Ticket Sales</h3>
+        <div class="chart-area">
+            @if (_weeklyMetrics.Any())
+            {
+                <div class="bar-chart">
+                    @foreach (var day in _weeklyMetrics)
+                    {
+                        var maxBookings = _weeklyMetrics.Max(m => m.TotalBookings);
+                        var height = maxBookings > 0 ? (int)(((double)day.TotalBookings / maxBookings) * 100) : 0;
+                        <div class="bar-item">
+                            <div class="bar" style="height: @(height)%"></div>
+                            <span class="bar-label">@day.Date.ToString("ddd")</span>
+                            <span class="bar-value">@day.TotalBookings</span>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <p class="empty-state">No data yet. Waiting for bookings...</p>
+            }
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3>Recent Alerts</h3>
+        <div class="alerts-feed">
+            @if (_alerts.Any())
+            {
+                @foreach (var alert in _alerts)
+                {
+                    <div class="alert-item @(alert.Status == "PaymentFailed" ? "alert-error" : "alert-warning")">
+                        <span class="alert-time">@alert.Timestamp.ToString("HH:mm:ss")</span>
+                        <span class="alert-msg">
+                            Booking @alert.BookingId.ToString()[..8]... — @alert.Status
+                        </span>
+                    </div>
+                }
+            }
+            else
+            {
+                <p class="empty-state">No alerts — all systems nominal ✅</p>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private DailyMetrics _today = new();
+    private List<DailyMetrics> _weeklyMetrics = [];
+    private List<BookingActivity> _alerts = [];
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _today = await MetricsService.GetTodayMetricsAsync();
+        _weeklyMetrics = await MetricsService.GetWeeklyMetricsAsync();
+        _alerts = await MetricsService.GetRecentAlertsAsync();
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/dashboard"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<DailyMetrics>("ReceiveMetricsUpdate", async (metrics) =>
+        {
+            _today = metrics;
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<BookingActivity>("ReceiveAlert", async (alert) =>
+        {
+            _alerts.Insert(0, alert);
+            if (_alerts.Count > 10) _alerts.RemoveAt(_alerts.Count - 1);
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+            await _hubConnection.DisposeAsync();
+    }
+}

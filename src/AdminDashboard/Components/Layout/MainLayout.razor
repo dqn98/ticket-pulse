@@ -1,0 +1,19 @@
+@inherits LayoutComponentBase
+
+<div class="dashboard-wrapper">
+    <aside class="sidebar">
+        <NavMenu />
+    </aside>
+    <main class="main-content">
+        <header class="top-bar">
+            <h1 class="page-title">@Body?.GetType().Name</h1>
+            <div class="top-bar-status">
+                <span class="status-dot online"></span>
+                <span>Live</span>
+            </div>
+        </header>
+        <div class="content-area">
+            @Body
+        </div>
+    </main>
+</div>

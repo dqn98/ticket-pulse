@@ -1,0 +1,24 @@
+<span class="status-badge status-@Status.ToLower().Replace("paymentfailed", "failed")">
+    @switch (Status)
+    {
+        case "Pending":
+            <span>🟡 Pending</span>
+            break;
+        case "Confirmed":
+            <span>🟢 Confirmed</span>
+            break;
+        case "PaymentFailed":
+            <span>🔴 Failed</span>
+            break;
+        case "Cancelled":
+            <span>⚫ Cancelled</span>
+            break;
+        default:
+            <span>@Status</span>
+            break;
+    }
+</span>
+
+@code {
+    [Parameter] public string Status { get; set; } = "Pending";
+}

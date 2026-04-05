@@ -8,6 +8,7 @@ var mongo = builder.AddMongoDB("mongo").AddDatabase("mongodata");
 var postgres = builder.AddPostgres("postgres").AddDatabase("postgresdata");
 var redis = builder.AddRedis("redis");
 var rabbitmq = builder.AddRabbitMQ("rabbitmq");
+var seq = builder.AddSeq("seq");
 
 // 2. Setup .NET Services
 var bookingService = builder.AddProject<Projects.BookingService>("bookingservice")
@@ -48,5 +49,12 @@ var frontend = builder.AddNpmApp("frontend", "../frontend", "dev")
 
 // Expose internal endpoints to ApiGateway if needed
 apiGateway.WithReference(catalogService);
+
+// 4. Admin Dashboard (real-time monitoring)
+var adminDashboard = builder.AddProject<Projects.AdminDashboard>("admindashboard")
+    .WithReference(rabbitmq)
+    .WithReference(seq)
+    .WaitFor(rabbitmq)
+    .WaitFor(seq);
 
 builder.Build().Run();

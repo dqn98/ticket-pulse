@@ -15,6 +15,7 @@ Bootstrap the 6 core projects (ApiGateway, IdentityService, BookingService, cata
 - [NEW] Create `ApiGateway` as an empty ASP.NET Core Web application in `src/ApiGateway`. Add `Yarp.ReverseProxy`.
 - [NEW] Create `IdentityService` as an ASP.NET Core Web API in `src/IdentityService`.
 - [NEW] Create `BookingService` as an ASP.NET Core Web API in `src/BookingService`.
+- [NEW] Create `AdminDashboard` as a .NET Blazor Web App in `src/AdminDashboard` for real-time monitoring.
 - All projects will reference `ServiceDefaults` for OpenTelemetry, resilience, and health checks.
 
 ### 3. Node.js / UI Services
@@ -24,8 +25,8 @@ Bootstrap the 6 core projects (ApiGateway, IdentityService, BookingService, cata
 
 ### 4. Aspire AppHost Configuration
 Modify `Program.cs` in `src/AppHost` to:
-- Spin up containers for SQL Server, PostgreSQL, MongoDB, Redis, and RabbitMQ.
-- Add the .NET projects (`ApiGateway`, `IdentityService`, `BookingService`).
+- Spin up containers for SQL Server, PostgreSQL, MongoDB, Redis, RabbitMQ, and Seq (for log aggregation).
+- Add the .NET projects (`ApiGateway`, `IdentityService`, `BookingService`, `AdminDashboard`).
 - Add the Node.js projects (`catalog-service`, `payment-service`, `frontend`) using `AddNpmApp`.
 - Inject connection strings (e.g. `WithReference(sql)`) and backend endpoints to the projects that need them based on the event and API contracts in `ticketpulse.md`.
 
@@ -104,6 +105,30 @@ Modify `Program.cs` in `src/AppHost` to:
     *   `payment-service.booking-pending` bound to `booking.pending`.
     *   `booking-service.payment-failed` bound to `payment.failed`.
     *   `notification-service.events` bound to `payment.success`, `booking.cancelled`.
+    *   `admin-dashboard.events` bound to `booking.*`, `payment.*`, `user.*` for CQRS read-model updates.
+
+### Admin Dashboard Service (.NET Blazor / API)
+*   **Purpose**: Real-time business metrics monitor. Uses CQRS to build read-models and SignalR for live UI updates.
+*   **Required Dependencies**: MassTransit (RabbitMQ), SignalR, Seq API client.
+*   **Injected Configurations**:
+    *   `ConnectionStrings__rabbitmq`: RabbitMQ connection string.
+    *   `ConnectionStrings__redis` or SQLite: For Storing aggregated read-models.
+*   **Real-time Capabilities**:
+    *   Consumes RabbitMQ events to update a local read-model (e.g. `Total Revenue`, `Total Bookings`).
+    *   Uses SignalR to push updated metrics instantly to connected Admin clients.
+    *   Queries Seq API to display recent system exceptions.
+*   **Defined Dashboards / UI Views**:
+    1. **Main Overview**: High-level real-time cards (Total Revenue, Today's Bookings, Active Users), a live line chart of sales, and a mini-feed of critical system alerts.
+    2. **Sales & Orders**: A live-updating data grid showing every incoming booking/payment status, including filters to track failed payments (`PaymentFailed` events).
+    3. **Event Analytics**: Metrics per event/venue—showing how many seats are locked/held vs. confirmed, helping visualize system load and high-demand events.
+    4. **System Health & Logs**: A direct interface utilizing the Seq API to display unhandled exceptions, OpenTelemetry error rates, and service health statuses.
+*   **Required Tasks (Checklist)**:
+    - [ ] 1. Create `AdminDashboard` project via `dotnet new blazor`.
+    - [ ] 2. Add `AdminDashboard` and `Seq` to `AppHost`.
+    - [ ] 3. Configure `MassTransit` consumers for Booking and Payment events.
+    - [ ] 4. Setup a local Read-Model Database (SQLite or Redis) to increment counters based on events.
+    - [ ] 5. Create a `DashboardHub` using SignalR for real-time pushing.
+    - [ ] 6. Create the Blazor UI (Charts, Data Grids) to visualize SignalR streams.
 
 ## Verification Plan
 

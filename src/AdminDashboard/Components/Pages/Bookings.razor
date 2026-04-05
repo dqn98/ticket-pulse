@@ -1,0 +1,116 @@
+@page "/bookings"
+@using AdminDashboard.Components.Shared
+@using AdminDashboard.Models
+@using AdminDashboard.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject MetricsService MetricsService
+@inject NavigationManager Navigation
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Bookings & Payments — TicketPulse Admin</PageTitle>
+
+<h2 class="page-heading">Bookings & Payments</h2>
+
+<div class="filter-bar">
+    <button class="filter-btn @(ActiveFilter == "All" ? "active" : "")" @onclick='() => SetFilter("All")'>All</button>
+    <button class="filter-btn @(ActiveFilter == "Pending" ? "active" : "")" @onclick='() => SetFilter("Pending")'>🟡 Pending</button>
+    <button class="filter-btn @(ActiveFilter == "Confirmed" ? "active" : "")" @onclick='() => SetFilter("Confirmed")'>🟢 Confirmed</button>
+    <button class="filter-btn @(ActiveFilter == "PaymentFailed" ? "active" : "")" @onclick='() => SetFilter("PaymentFailed")'>🔴 Failed</button>
+    <button class="filter-btn @(ActiveFilter == "Cancelled" ? "active" : "")" @onclick='() => SetFilter("Cancelled")'>⚫ Cancelled</button>
+</div>
+
+<div class="data-grid-container">
+    <table class="data-grid">
+        <thead>
+            <tr>
+                <th>Booking ID</th>
+                <th>User</th>
+                <th>Event</th>
+                <th>Seat</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var booking in FilteredBookings)
+            {
+                <tr class="@GetRowClass(booking.Status)">
+                    <td class="mono">@booking.BookingId.ToString()[..8]...</td>
+                    <td>@booking.UserId</td>
+                    <td>@booking.EventId</td>
+                    <td>@booking.SeatId</td>
+                    <td>@booking.Amount.ToString("C")</td>
+                    <td><StatusBadge Status="@booking.Status" /></td>
+                    <td>@booking.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @if (!FilteredBookings.Any())
+    {
+        <div class="empty-state table-empty">
+            <p>No bookings found for filter "@ActiveFilter"</p>
+        </div>
+    }
+</div>
+
+@code {
+    private List<BookingActivity> _bookings = [];
+    private string ActiveFilter = "All";
+    private HubConnection? _hubConnection;
+
+    private IEnumerable<BookingActivity> FilteredBookings =>
+        ActiveFilter == "All"
+            ? _bookings
+            : _bookings.Where(b => b.Status == ActiveFilter);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _bookings = await MetricsService.GetRecentBookingsAsync(100);
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/hubs/dashboard"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<BookingActivity>("ReceiveBookingActivity", async (activity) =>
+        {
+            var existing = _bookings.FindIndex(b => b.BookingId == activity.BookingId);
+            if (existing >= 0)
+            {
+                _bookings[existing] = activity;
+            }
+            else
+            {
+                _bookings.Insert(0, activity);
+                if (_bookings.Count > 100) _bookings.RemoveAt(_bookings.Count - 1);
+            }
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    private void SetFilter(string filter)
+    {
+        ActiveFilter = filter;
+    }
+
+    private string GetRowClass(string status) => status switch
+    {
+        "Pending" => "row-pending",
+        "Confirmed" => "row-confirmed",
+        "PaymentFailed" => "row-failed",
+        "Cancelled" => "row-cancelled",
+        _ => ""
+    };
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+            await _hubConnection.DisposeAsync();
+    }
+}

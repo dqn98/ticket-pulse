@@ -1,0 +1,118 @@
+@page "/health"
+@using AdminDashboard.Services
+@inject SeqLogService SeqLogService
+@rendermode InteractiveServer
+
+<PageTitle>System Health — TicketPulse Admin</PageTitle>
+
+<h2 class="page-heading">System Health & Logs</h2>
+
+<section class="metrics-grid">
+    <div class="metric-card health-card">
+        <div class="metric-icon">🟢</div>
+        <div class="metric-info">
+            <span class="metric-label">API Gateway</span>
+            <span class="metric-value health-ok">Healthy</span>
+        </div>
+    </div>
+    <div class="metric-card health-card">
+        <div class="metric-icon">🟢</div>
+        <div class="metric-info">
+            <span class="metric-label">Booking Service</span>
+            <span class="metric-value health-ok">Healthy</span>
+        </div>
+    </div>
+    <div class="metric-card health-card">
+        <div class="metric-icon">🟢</div>
+        <div class="metric-info">
+            <span class="metric-label">Catalog Service</span>
+            <span class="metric-value health-ok">Healthy</span>
+        </div>
+    </div>
+    <div class="metric-card health-card">
+        <div class="metric-icon">🟢</div>
+        <div class="metric-info">
+            <span class="metric-label">Payment Service</span>
+            <span class="metric-value health-ok">Healthy</span>
+        </div>
+    </div>
+</section>
+
+<section class="chart-card" style="margin-top: 2rem;">
+    <h3>Recent System Exceptions (from Seq)</h3>
+    <div class="log-feed">
+        @if (_isLoading)
+        {
+            <p class="empty-state">Loading logs from Seq...</p>
+        }
+        else if (_logs.Any())
+        {
+            @foreach (var log in _logs)
+            {
+                <div class="log-entry log-@log.Level.ToLower()">
+                    <span class="log-time">@log.Timestamp.ToString("yyyy-MM-dd HH:mm:ss")</span>
+                    <span class="log-level">@log.Level</span>
+                    <span class="log-msg">@log.RenderedMessage</span>
+                    @if (!string.IsNullOrEmpty(log.Exception))
+                    {
+                        <details class="log-exception">
+                            <summary>Exception details</summary>
+                            <pre>@log.Exception</pre>
+                        </details>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <p class="empty-state">No errors found — all systems nominal ✅</p>
+        }
+    </div>
+</section>
+
+<section class="chart-card" style="margin-top: 2rem;">
+    <h3>Infrastructure Status</h3>
+    <div class="infra-grid">
+        <div class="infra-item">
+            <span class="infra-icon">🗄️</span>
+            <span class="infra-name">SQL Server</span>
+            <span class="infra-status online">Running</span>
+        </div>
+        <div class="infra-item">
+            <span class="infra-icon">🍃</span>
+            <span class="infra-name">MongoDB</span>
+            <span class="infra-status online">Running</span>
+        </div>
+        <div class="infra-item">
+            <span class="infra-icon">🐘</span>
+            <span class="infra-name">PostgreSQL</span>
+            <span class="infra-status online">Running</span>
+        </div>
+        <div class="infra-item">
+            <span class="infra-icon">⚡</span>
+            <span class="infra-name">Redis</span>
+            <span class="infra-status online">Running</span>
+        </div>
+        <div class="infra-item">
+            <span class="infra-icon">🐇</span>
+            <span class="infra-name">RabbitMQ</span>
+            <span class="infra-status online">Running</span>
+        </div>
+        <div class="infra-item">
+            <span class="infra-icon">📋</span>
+            <span class="infra-name">Seq</span>
+            <span class="infra-status online">Running</span>
+        </div>
+    </div>
+</section>
+
+@code {
+    private List<SeqLogEntry> _logs = [];
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _logs = await SeqLogService.GetRecentErrorsAsync(20);
+        _isLoading = false;
+    }
+}
